@@ -1,0 +1,13 @@
+## Interface: 30300
+## Title: LootSuggestion
+## Author: Akkio
+## Version: 0.1.0
+## DefaultState: Enabled
+## Notes: Preset-based gear scoring for Ascension and WoW 3.3.5.
+
+## SavedVariablesPerCharacter: LootSuggestion
+
+core.lua
+profiles.lua
+ui.lua
+tooltip.lua
