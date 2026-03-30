@@ -89,7 +89,9 @@ local function formatContributionLine(entry)
         return nil, nil
     end
 
-    local label = string.format("%s +%d", entry.label, entry.value or 0)
+    local value = entry.value or 0
+    local displayValue = math.abs(value - math.floor(value + 0.5)) < 0.001 and string.format("%.0f", value) or string.format("%.2f", value)
+    local label = string.format("%s +%s", entry.label, displayValue)
 
     if entry.capInfo and entry.capInfo.breakdownText then
         return label, entry.capInfo.breakdownText
@@ -121,10 +123,11 @@ function LS:AddTooltipScore(tooltip)
     local customWeightCount = self:GetCustomWeightCount(profileId)
     local customCapCount = self:GetCustomCapCount(profileId)
     local customizationText = formatCustomizationText(customWeightCount, customCapCount)
+    local profileDisplayName = self.GetProfileDisplayName and self:GetProfileDisplayName(profileId) or nil
 
     tooltip:AddLine(" ")
     tooltip:AddLine("|cff5fb0ffLootSuggestion|r")
-    addScoreLine(tooltip, "Profile", self:GetProfileDisplayName(profileId) or profile.name, 0.60, 0.80, 1.00)
+    addScoreLine(tooltip, "Profile", profileDisplayName or profile.name, 0.60, 0.80, 1.00)
     addScoreLine(tooltip, "Score", string.format("%.1f", score), 0.20, 1.00, 0.20)
 
     if customizationText then

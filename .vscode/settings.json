@@ -19,6 +19,15 @@
         "DEFAULT_CHAT_FRAME",
         "ItemRefTooltip",
         "ShoppingTooltip1",
-        "ShoppingTooltip2"
-    ]
+        "ShoppingTooltip2",
+        "APIDocumentation",
+        "TablesAPIMixin",
+        "FunctionsAPIMixin",
+        "EventsAPIMixin",
+        "FieldsAPIMixin",
+        "SystemsAPIMixin",
+        "ChatFrame_OpenChat",
+        "ChatTypeInfo"
+    ],
+    "Lua.type.weakUnionCheck": true
 }

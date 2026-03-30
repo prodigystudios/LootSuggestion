@@ -303,7 +303,7 @@ function LS:CreateMainFrame()
 
     local frame = CreateFrame("Frame", "LootSuggestionMainFrame", UIParent)
     frame:SetWidth(930)
-    frame:SetHeight(630)
+    frame:SetHeight(760)
     frame:SetPoint(
         self.db.framePosition.point,
         UIParent,
@@ -346,8 +346,8 @@ function LS:CreateMainFrame()
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -8, -8)
 
-    frame.leftPanel = createPanel(frame, "TOPLEFT", frame.header, "BOTTOMLEFT", 0, -12, 260, 542, THEME.inset)
-    frame.rightPanel = createPanel(frame, "TOPLEFT", frame.leftPanel, "TOPRIGHT", 14, 0, 632, 542, THEME.inset)
+    frame.leftPanel = createPanel(frame, "TOPLEFT", frame.header, "BOTTOMLEFT", 0, -12, 260, 672, THEME.inset)
+    frame.rightPanel = createPanel(frame, "TOPLEFT", frame.leftPanel, "TOPRIGHT", 14, 0, 632, 672, THEME.inset)
 
     local leftTitle = createSectionTitle(frame.leftPanel, "Preset Profiles", "TOPLEFT", frame.leftPanel, "TOPLEFT", 14, -14)
     local leftText = createBodyText(frame.leftPanel, 228, "GameFontHighlightSmall")
@@ -559,7 +559,7 @@ function LS:CreateMainFrame()
     end)
     self.wizardFrame = wizard
 
-    local weightOverlay, weightModal = createModalFrame(frame, "Weight Editor", "Adjust the active preset without slash commands. Apply stores a custom override for this profile.", 812, 500)
+    local weightOverlay, weightModal = createModalFrame(frame, "Weight Editor", "Adjust the active preset without slash commands. Apply stores a custom override for this profile.", 812, 700)
     local editor = weightOverlay
     editor:SetFrameLevel(frame:GetFrameLevel() + 29)
     editor.title = weightModal.title
@@ -568,7 +568,7 @@ function LS:CreateMainFrame()
     editor.profileText:SetPoint("TOPLEFT", editor.description, "BOTTOMLEFT", 0, -14)
     editor.profileText:SetTextColor(THEME.brightText[1], THEME.brightText[2], THEME.brightText[3])
     editor.rows = {}
-    for index = 1, 10 do
+    for index = 1, 14 do
         local row = createWeightEditorRow(weightModal, editor.rows[index - 1])
         if index == 1 then
             row:SetPoint("TOPLEFT", editor.profileText, "BOTTOMLEFT", 0, -18)
@@ -576,7 +576,7 @@ function LS:CreateMainFrame()
         editor.rows[index] = row
     end
     editor.helpText = createBodyText(weightModal, 740, "GameFontHighlightSmall")
-    editor.helpText:SetPoint("TOPLEFT", editor.rows[10], "BOTTOMLEFT", 0, -14)
+    editor.helpText:SetPoint("TOPLEFT", editor.rows[#editor.rows], "BOTTOMLEFT", 0, -14)
     editor.helpText:SetText("Base is the preset value. Live is the scoring value now. Reset removes only that one override.")
     editor.resetAllButton = createActionButton(weightModal, 154, 28, "Reset All Overrides")
     editor.resetAllButton:SetPoint("BOTTOMLEFT", weightModal, "BOTTOMLEFT", 16, 14)
@@ -1063,6 +1063,10 @@ function LS:RefreshPriorityWizard()
 end
 
 function LS:RefreshUI()
+    if self.InvalidateTooltipCaches then
+        self:InvalidateTooltipCaches()
+    end
+
     if not self.mainFrame then
         return
     end
