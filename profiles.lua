@@ -272,6 +272,11 @@ local function isWeaponEquipLocation(equipLoc)
         or equipLoc == "INVTYPE_RELIC"
 end
 
+local function isCharacterAdvancementVisible()
+    local ca = rawget(_G, "CharacterAdvancement")
+    return ca and ca.IsShown and ca:IsShown() or false
+end
+
 local function formatStatValue(value)
     if math.abs((value or 0) - math.floor((value or 0) + 0.5)) < 0.001 then
         return string.format("%.0f", value or 0)
@@ -1252,9 +1257,11 @@ function LS:RefreshCharacterAdvancementSpellCache()
 end
 
 function LS:GetCharacterAdvancementKnownSpellIDs()
-    local liveKnownSpellIDs = self:RefreshCharacterAdvancementSpellCache()
-    if liveKnownSpellIDs then
-        return liveKnownSpellIDs
+    if isCharacterAdvancementVisible() then
+        local liveKnownSpellIDs = self:RefreshCharacterAdvancementSpellCache()
+        if liveKnownSpellIDs then
+            return liveKnownSpellIDs
+        end
     end
 
     if self.db and type(self.db.caKnownSpellIDs) == "table" then
@@ -1265,7 +1272,9 @@ function LS:GetCharacterAdvancementKnownSpellIDs()
 end
 
 function LS:GetCharacterAdvancementKnownPassiveNames()
-    self:RefreshCharacterAdvancementSpellCache()
+    if isCharacterAdvancementVisible() then
+        self:RefreshCharacterAdvancementSpellCache()
+    end
 
     if self.db and type(self.db.caKnownPassiveNames) == "table" then
         return self.db.caKnownPassiveNames

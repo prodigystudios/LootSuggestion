@@ -185,19 +185,23 @@ function LS:StartCharacterAdvancementMonitor()
 
     local monitorFrame = CreateFrame("Frame")
     local elapsedSinceRefresh = 0
+    local installAttempts = 0
 
-    monitorFrame:SetScript("OnUpdate", function(_, elapsed)
+    monitorFrame:SetScript("OnUpdate", function(frame, elapsed)
         elapsedSinceRefresh = elapsedSinceRefresh + (elapsed or 0)
-        if elapsedSinceRefresh < 1 then
+        if elapsedSinceRefresh < 5 then
             return
         end
         elapsedSinceRefresh = 0
+        installAttempts = installAttempts + 1
 
-        LS:TryInstallCharacterAdvancementHooks()
+        if LS:TryInstallCharacterAdvancementHooks() then
+            frame:SetScript("OnUpdate", nil)
+            return
+        end
 
-        local ca = rawget(_G, "CharacterAdvancement")
-        if ca and ca.IsShown and ca:IsShown() then
-            LS:RefreshCharacterAdvancementCache("visible")
+        if installAttempts >= 12 then
+            frame:SetScript("OnUpdate", nil)
         end
     end)
 

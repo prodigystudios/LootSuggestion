@@ -296,6 +296,64 @@ local function createModalFrame(parent, titleText, descriptionText, width, heigh
     return overlay, modal
 end
 
+function LS:CreateCharacterPanelButton()
+    local characterFrame = rawget(_G, "AscensionCharacterFrame") or rawget(_G, "CharacterFrame")
+    if not characterFrame then
+        return
+    end
+
+    local button = self.characterPanelButton
+    if not button then
+        button = CreateFrame("Button", "LootSuggestionCharacterButton", characterFrame, "UIPanelButtonTemplate")
+        button:SetWidth(84)
+        button:SetHeight(22)
+        button:SetText("Weights")
+        button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+        button:SetScript("OnClick", function(_, mouseButton)
+            local profileId, profile = LS:GetActiveProfile()
+            if mouseButton == "RightButton" then
+                local text = LS:GetWeightListText(profileId)
+                if text and text ~= "" then
+                    LS:Print((profile and profile.name or "Active profile") .. " weights: " .. text)
+                    LS:Print("* means custom override")
+                else
+                    LS:Print("No active weights available.")
+                end
+                return
+            end
+
+            LS:OpenWeightEditor()
+        end)
+
+        button:SetScript("OnEnter", function(current)
+            GameTooltip:SetOwner(current, "ANCHOR_TOP")
+            GameTooltip:SetText("LootSuggestion", 0.95, 0.82, 0.28)
+            GameTooltip:AddLine("Left-click: Open Weight Editor", 0.90, 0.90, 0.90)
+            GameTooltip:AddLine("Right-click: Print active weights to chat", 0.72, 0.72, 0.72)
+            GameTooltip:Show()
+        end)
+
+        button:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+
+        self.characterPanelButton = button
+    end
+
+    button:SetParent(characterFrame)
+    button:SetFrameStrata("HIGH")
+    button:SetFrameLevel(characterFrame:GetFrameLevel() + 8)
+    button:ClearAllPoints()
+
+    local closeButton = rawget(_G, characterFrame:GetName() .. "CloseButton") or characterFrame.CloseButton
+    if closeButton then
+        button:SetPoint("RIGHT", closeButton, "LEFT", -6, 0)
+    else
+        button:SetPoint("TOPRIGHT", characterFrame, "TOPRIGHT", -42, -28)
+    end
+end
+
 function LS:CreateMainFrame()
     if self.mainFrame then
         return
@@ -688,6 +746,7 @@ function LS:CreateMainFrame()
     self.priorityWizardFrame = priorityWizard
 
     self.mainFrame = frame
+    self:CreateCharacterPanelButton()
 end
 
 function LS:OpenWeightEditor()
@@ -1065,6 +1124,10 @@ end
 function LS:RefreshUI()
     if self.InvalidateTooltipCaches then
         self:InvalidateTooltipCaches()
+    end
+
+    if not self.characterPanelButton then
+        self:CreateCharacterPanelButton()
     end
 
     if not self.mainFrame then
