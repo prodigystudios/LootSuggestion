@@ -425,6 +425,93 @@ function LS:IsTwoHandedSetupEquipped()
     return self:GetItemEquipLocation(mainHandLink) == "INVTYPE_2HWEAPON"
 end
 
+local function isGenericOneHandWeapon(equipLoc)
+    return equipLoc == "INVTYPE_WEAPON"
+end
+
+local function isMainHandWeapon(equipLoc)
+    return equipLoc == "INVTYPE_WEAPONMAINHAND"
+end
+
+local function isOffHandWeapon(equipLoc)
+    return equipLoc == "INVTYPE_WEAPONOFFHAND"
+end
+
+local function isOffHandSupport(equipLoc)
+    return equipLoc == "INVTYPE_SHIELD" or equipLoc == "INVTYPE_HOLDABLE"
+end
+
+local function isDualWieldOffHand(equipLoc)
+    return equipLoc == "INVTYPE_WEAPON" or equipLoc == "INVTYPE_WEAPONOFFHAND"
+end
+
+function LS:GetWeaponComparisonCandidates(itemLink)
+    local equipLoc = self:GetItemEquipLocation(itemLink)
+    if not equipLoc then
+        return nil
+    end
+
+    local mainHandLoc = self:GetItemEquipLocation(GetInventoryItemLink("player", 16))
+    local offHandLoc = self:GetItemEquipLocation(GetInventoryItemLink("player", 17))
+    local currentTwoHanded = mainHandLoc == "INVTYPE_2HWEAPON"
+    local candidates = {}
+
+    local function addCandidate(slotId, excludedSlots, label)
+        candidates[#candidates + 1] = {
+            slotId = slotId,
+            excludedSlots = excludedSlots,
+            label = label,
+        }
+    end
+
+    if equipLoc == "INVTYPE_2HWEAPON" then
+        addCandidate(16, { 16, 17 }, "Vs Main Hand + Off Hand")
+        return candidates
+    end
+
+    if currentTwoHanded and (
+        isGenericOneHandWeapon(equipLoc) or
+        isMainHandWeapon(equipLoc) or
+        isOffHandWeapon(equipLoc) or
+        isOffHandSupport(equipLoc)
+    ) then
+        addCandidate(16, { 16, 17 }, "Vs current 2H setup")
+        return candidates
+    end
+
+    if isMainHandWeapon(equipLoc) then
+        addCandidate(16, { 16 }, "Vs Main Hand, keep Off Hand")
+        return candidates
+    end
+
+    if isOffHandWeapon(equipLoc) then
+        addCandidate(17, { 17 }, "Vs Off Hand, keep Main Hand")
+        return candidates
+    end
+
+    if isOffHandSupport(equipLoc) then
+        addCandidate(17, { 17 }, "Vs Off Hand")
+        return candidates
+    end
+
+    if isGenericOneHandWeapon(equipLoc) then
+        if isOffHandSupport(offHandLoc) then
+            addCandidate(16, { 16 }, "Vs Main Hand, keep Off Hand")
+            return candidates
+        end
+
+        addCandidate(16, { 16 }, "Vs Main Hand, keep Off Hand")
+
+        if not offHandLoc or isDualWieldOffHand(offHandLoc) then
+            addCandidate(17, { 17 }, "Vs Off Hand, keep Main Hand")
+        end
+
+        return candidates
+    end
+
+    return nil
+end
+
 function LS:GetCombinedEquippedScore(slotIds, comparisonContext)
     local totalScore = 0
     local labels = {}
@@ -442,43 +529,59 @@ function LS:GetCombinedEquippedScore(slotIds, comparisonContext)
 end
 
 function LS:GetEquippedComparison(itemLink, itemScore)
-    local candidateSlots = self:GetComparisonTarget(itemLink)
-    if not candidateSlots or not itemScore then
+    if not itemScore then
         return nil
     end
 
     local equipLoc = self:GetItemEquipLocation(itemLink)
-    local currentTwoHanded = self:IsTwoHandedSetupEquipped()
-    if equipLoc == "INVTYPE_2HWEAPON" then
-        local comparisonContext = { excludedSlots = { 16, 17 } }
-        local equippedScore, slotLabel, equippedLinks = self:GetCombinedEquippedScore({ 16, 17 }, comparisonContext)
-        local contextualItemScore = self:GetItemScore(itemLink, comparisonContext) or itemScore
-        return {
-            slotId = 16,
-            delta = contextualItemScore - equippedScore,
-            equippedLink = equippedLinks[16] or equippedLinks[17],
-            equippedScore = equippedScore,
-            label = "Vs " .. slotLabel,
-        }
+
+    local weaponCandidates = self:GetWeaponComparisonCandidates(itemLink)
+    if weaponCandidates and weaponCandidates[1] then
+        local bestWeaponResult
+
+        for _, candidate in ipairs(weaponCandidates) do
+            local comparisonContext = { excludedSlots = candidate.excludedSlots }
+            local contextualItemScore = self:GetItemScore(itemLink, comparisonContext) or itemScore
+            local equippedScore = 0
+            local equippedLink = nil
+
+            if candidate.excludedSlots and candidate.excludedSlots[2] then
+                local combinedScore, _, equippedLinks = self:GetCombinedEquippedScore(candidate.excludedSlots, comparisonContext)
+                equippedScore = combinedScore
+                equippedLink = equippedLinks[16] or equippedLinks[17]
+            else
+                equippedLink = GetInventoryItemLink("player", candidate.slotId)
+                if equippedLink then
+                    equippedScore = self:GetItemScore(equippedLink, comparisonContext) or 0
+                end
+            end
+
+            local delta = contextualItemScore - equippedScore
+            if not bestWeaponResult or delta > bestWeaponResult.delta then
+                bestWeaponResult = {
+                    slotId = candidate.slotId,
+                    delta = delta,
+                    equippedLink = equippedLink,
+                    equippedScore = equippedScore,
+                    itemScore = contextualItemScore,
+                    label = candidate.label,
+                }
+            end
+        end
+
+        if bestWeaponResult then
+            if not bestWeaponResult.equippedLink and bestWeaponResult.slotId == 17 and bestWeaponResult.label == "Vs Off Hand, keep Main Hand" then
+                bestWeaponResult.label = "Vs empty Off Hand, keep Main Hand"
+            elseif not bestWeaponResult.equippedLink and bestWeaponResult.slotId == 16 and bestWeaponResult.label == "Vs Main Hand, keep Off Hand" then
+                bestWeaponResult.label = "Vs empty Main Hand, keep Off Hand"
+            end
+            return bestWeaponResult
+        end
     end
 
-    if currentTwoHanded and (
-        equipLoc == "INVTYPE_WEAPON" or
-        equipLoc == "INVTYPE_WEAPONMAINHAND" or
-        equipLoc == "INVTYPE_WEAPONOFFHAND" or
-        equipLoc == "INVTYPE_HOLDABLE" or
-        equipLoc == "INVTYPE_SHIELD"
-    ) then
-        local comparisonContext = { excludedSlots = { 16, 17 } }
-        local equippedScore, slotLabel, equippedLinks = self:GetCombinedEquippedScore({ 16, 17 }, comparisonContext)
-        local contextualItemScore = self:GetItemScore(itemLink, comparisonContext) or itemScore
-        return {
-            slotId = candidateSlots[1],
-            delta = contextualItemScore - equippedScore,
-            equippedLink = equippedLinks[16] or equippedLinks[17],
-            equippedScore = equippedScore,
-            label = "Vs " .. slotLabel .. " (2H setup)",
-        }
+    local candidateSlots = self:GetComparisonTarget(itemLink)
+    if not candidateSlots then
+        return nil
     end
 
     local bestResult

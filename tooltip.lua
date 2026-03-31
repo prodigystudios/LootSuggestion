@@ -124,10 +124,11 @@ function LS:AddTooltipScore(tooltip)
     local customCapCount = self:GetCustomCapCount(profileId)
     local customizationText = formatCustomizationText(customWeightCount, customCapCount)
     local profileDisplayName = self.GetProfileDisplayName and self:GetProfileDisplayName(profileId) or nil
+    local profileLabel = profileDisplayName or (profile and profile.name) or "Unknown"
 
     tooltip:AddLine(" ")
     tooltip:AddLine("|cff5fb0ffLootSuggestion|r")
-    addScoreLine(tooltip, "Profile", profileDisplayName or profile.name, 0.60, 0.80, 1.00)
+    addScoreLine(tooltip, "Profile", profileLabel, 0.60, 0.80, 1.00)
     addScoreLine(tooltip, "Score", string.format("%.1f", score), 0.20, 1.00, 0.20)
 
     if customizationText then
