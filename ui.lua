@@ -472,7 +472,6 @@ function LS:CreateMainFrame()
     frame.recommendationText:SetPoint("TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -12)
     frame.recommendationText:SetText("")
 
-    frame.utilityDivider = createAccentLine(frame.utilityPanel, "TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -40, 272)
 
     frame.setupButton = createActionButton(frame.utilityPanel, 272, 28, "Run Setup Wizard")
     frame.setupButton:SetPoint("TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -52)
