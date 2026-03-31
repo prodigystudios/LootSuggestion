@@ -75,81 +75,76 @@ for _, definition in ipairs(LS.statDefinitions) do
     LS.statLabels[definition.key] = definition.label
 end
 
-LS.scalingChoices = {
-    strength = {
-        label = "Strength-based",
-        description = "For builds where strength remains the main stat driver.",
-    },
-    agility = {
-        label = "Agility-based",
-        description = "For builds that scale more from agility than from strength.",
-    },
+LS.classChoices = {
+    { value = "WARRIOR", title = "Warrior", description = "Weapon-focused builds, tanks and physical damage." },
+    { value = "PALADIN", title = "Paladin", description = "Hybrid melee, tank and support-oriented builds." },
+    { value = "HUNTER", title = "Hunter", description = "Ranged physical damage and agility-driven builds." },
+    { value = "ROGUE", title = "Rogue", description = "Fast physical damage, crit and proc-oriented builds." },
+    { value = "PRIEST", title = "Priest", description = "Caster damage and healing-focused builds." },
+    { value = "SHAMAN", title = "Shaman", description = "Hybrid melee, caster, healing and tank-capable builds." },
+    { value = "MAGE", title = "Mage", description = "Spell damage and crit-focused caster builds." },
+    { value = "WARLOCK", title = "Warlock", description = "Spell damage, sustain and debuff-oriented caster builds." },
+    { value = "DRUID", title = "Druid", description = "Flexible melee, caster, healing and tank builds." },
 }
 
-LS.tankStyleChoices = {
-    evasion = {
-        label = "Evasion",
-        description = "For tanks that lean on agility, dodge and avoidance.",
-    },
-    block = {
-        label = "Block",
-        description = "For shield tanks where blocking is a major part of mitigation.",
-    },
-    health = {
-        label = "Health/Armor",
-        description = "For tanks that value bigger health pools and raw armor first.",
-    },
-}
+LS.classSpecOptions = {}
+LS.sourcePresets = {}
+LS.sourcePresetAliases = {}
 
-LS.scalingModifiers = {
-    physical = {
-        strength = {},
-        agility = {
-            strength = -0.55,
-            agility = 0.55,
-            critRating = 0.10,
-        },
-    },
-    tank = {
-        strength = {},
-        agility = {
-            strength = -0.45,
-            agility = 0.95,
-            dodgeRating = 0.20,
-            critRating = 0.15,
-            parryRating = -0.20,
-            blockRating = -0.20,
-        },
-    },
-}
+function LS:RegisterClassSpecs(classToken, specs)
+    if not classToken or type(specs) ~= "table" then
+        return
+    end
 
-LS.tankStyleModifiers = {
-    evasion = {
-        agility = 0.30,
-        stamina = -0.10,
-        dodgeRating = 0.35,
-        critRating = 0.10,
-        blockRating = -0.35,
-        blockValue = -0.30,
-        parryRating = -0.15,
-    },
-    block = {
-        strength = 0.30,
-        defenseRating = 0.15,
-        dodgeRating = -0.15,
-        parryRating = 0.10,
-        blockRating = 0.95,
-        blockValue = 0.90,
-    },
-    health = {
-        stamina = 0.45,
-        armor = 0.55,
-        defenseRating = 0.15,
-        dodgeRating = -0.10,
-        parryRating = -0.10,
-        blockRating = -0.10,
-    },
-}
+    self.classSpecOptions[classToken] = specs
+end
+
+function LS:RegisterSourcePreset(presetKey, preset)
+    if not presetKey or type(preset) ~= "table" then
+        return
+    end
+
+    if type(preset.weights) == "table" and preset.weights.healingPower ~= nil then
+        local healingWeight = preset.weights.healingPower or 0
+        local spellWeight = preset.weights.spellPower
+
+        if spellWeight == nil or healingWeight > spellWeight then
+            preset.weights.spellPower = healingWeight
+        end
+
+        preset.weights.healingPower = nil
+    end
+
+    preset.key = presetKey
+    self.sourcePresets[presetKey] = preset
+end
+
+function LS:RegisterSourcePresetAlias(aliasKey, targetKey)
+    if not aliasKey or not targetKey then
+        return
+    end
+
+    self.sourcePresetAliases[aliasKey] = targetKey
+end
+
+function LS:ResolveSourcePresetKey(presetKey)
+    local currentKey = presetKey
+    local visited = {}
+
+    while currentKey and self.sourcePresetAliases and self.sourcePresetAliases[currentKey] do
+        if visited[currentKey] then
+            break
+        end
+        visited[currentKey] = true
+        currentKey = self.sourcePresetAliases[currentKey]
+    end
+
+    if currentKey and self.sourcePresets and self.sourcePresets[currentKey] then
+        return currentKey
+    end
+
+    return nil
+end
 
 LS.equipmentStyleModifiers = {
     physical = {
@@ -996,73 +991,112 @@ function LS:GetEquippedStatTotal(statKey, excludedSlots)
     return total
 end
 
-function LS:RoleUsesScaling(role)
-    return role == "physical" or role == "tank"
+function LS:GetClassOptions()
+    return self.classChoices or {}
 end
 
-function LS:RoleUsesTankStyle(role)
-    return role == "tank"
+function LS:GetClassLabel(classToken)
+    for _, option in ipairs(self:GetClassOptions()) do
+        if option.value == classToken then
+            return option.title
+        end
+    end
+
+    return classToken
+end
+
+function LS:GetSpecOptionsForClass(classToken)
+    local options = self.classSpecOptions and self.classSpecOptions[classToken]
+    if options and options[1] then
+        return options
+    end
+
+    return {}
+end
+
+function LS:GetSpecLabel(classToken, specToken)
+    for _, option in ipairs(self:GetSpecOptionsForClass(classToken)) do
+        if option.value == specToken then
+            return option.title
+        end
+    end
+
+    return specToken
+end
+
+function LS:GetRoleForSpec(classToken, specToken)
+    for _, option in ipairs(self:GetSpecOptionsForClass(classToken)) do
+        if option.value == specToken then
+            return option.role
+        end
+    end
+
+    return nil
+end
+
+function LS:GetDefaultSpecForRole(classToken, role)
+    for _, option in ipairs(self:GetSpecOptionsForClass(classToken)) do
+        if option.role == role then
+            return option.value
+        end
+    end
+
+    return nil
+end
+
+function LS:GetSourcePresetKeyFromAnswers(answers)
+    if not answers then
+        return nil
+    end
+
+    local explicitKey = self:ResolveSourcePresetKey(answers.sourcePreset)
+    if explicitKey then
+        return explicitKey
+    end
+
+    if not answers.class then
+        return nil
+    end
+
+    for presetKey, preset in pairs(self.sourcePresets or {}) do
+        if preset.class == answers.class and answers.spec and preset.spec == answers.spec then
+            return presetKey
+        end
+    end
+
+    if not answers.role then
+        return nil
+    end
+
+    for presetKey, preset in pairs(self.sourcePresets or {}) do
+        if preset.class == answers.class and preset.role == answers.role then
+            return presetKey
+        end
+    end
+
+    return nil
+end
+
+function LS:GetSourcePresetFromAnswers(answers)
+    local presetKey = answers and self:GetSourcePresetKeyFromAnswers(answers) or nil
+    return presetKey and self.sourcePresets and self.sourcePresets[presetKey] or nil
+end
+
+function LS:GetSelectedSourcePreset(answers)
+    local source = answers or (self.db and self.db.setup)
+    return self:GetSourcePresetFromAnswers(source)
 end
 
 function LS:GetWizardStepCount(answers)
-    local role = answers and answers.role
-    if self:RoleUsesTankStyle(role) then
-        return 4
-    end
-
-    if self:RoleUsesScaling(role) then
-        return 3
-    end
-
     return 2
 end
 
 function LS:GetSelectedScaling(profileId, answers)
-    local profile = self.profiles and self.profiles[profileId]
-    if not profile or not profile.scalingGroup then
-        return nil
-    end
-
-    local source = answers or (self.db and self.db.setup)
-    if not source or source.role ~= profile.scalingGroup then
-        return nil
-    end
-
-    local scaling = source and source.scaling or nil
-    if scaling == "strength" or scaling == "agility" then
-        return scaling
-    end
-
     return nil
 end
 
 function LS:GetSelectedTankStyle(profileId, answers)
-    local profile = self.profiles and self.profiles[profileId]
-    if not profile or profile.scalingGroup ~= "tank" then
-        return nil
-    end
-
-    local source = answers or (self.db and self.db.setup)
-    if not source or source.role ~= "tank" then
-        return nil
-    end
-
-    local tankStyle = source.tankStyle
-    if tankStyle and self.tankStyleChoices[tankStyle] then
-        return tankStyle
-    end
-
     return nil
-end
-
-function LS:GetScalingLabel(scaling)
-    local choice = scaling and self.scalingChoices and self.scalingChoices[scaling]
-    return choice and choice.label or nil
-end
-
-function LS:GetTankStyleLabel(tankStyle)
-    local choice = tankStyle and self.tankStyleChoices and self.tankStyleChoices[tankStyle]
-    return choice and choice.label or nil
 end
 
 local function joinLabels(parts)
@@ -1078,16 +1112,19 @@ local function joinLabels(parts)
 end
 
 function LS:GetProfileContextLabel(profileId, answers)
+    local source = answers or (self.db and self.db.setup) or {}
     local labels = {}
-    local tankStyleLabel = self:GetTankStyleLabel(self:GetSelectedTankStyle(profileId, answers))
-    local scalingLabel = self:GetScalingLabel(self:GetSelectedScaling(profileId, answers))
+    local sourcePreset = self:GetSelectedSourcePreset(source)
+    local specLabel = source.class and source.spec and self:GetSpecLabel(source.class, source.spec) or nil
 
-    if tankStyleLabel then
-        table.insert(labels, tankStyleLabel)
+    if source.class then
+        table.insert(labels, self:GetClassLabel(source.class))
     end
 
-    if scalingLabel then
-        table.insert(labels, scalingLabel)
+    if specLabel then
+        table.insert(labels, specLabel)
+    elseif sourcePreset then
+        table.insert(labels, sourcePreset.specLabel or sourcePreset.label)
     end
 
     local combined = joinLabels(labels)
@@ -1631,16 +1668,19 @@ function LS:GetProfileSummaryText(profileId, profile, answers)
         return ""
     end
 
+    local source = answers or (self.db and self.db.setup) or {}
     local lines = { profile.summary }
-    local tankStyleLabel = self:GetTankStyleLabel(self:GetSelectedTankStyle(profileId, answers))
-    local scalingLabel = self:GetScalingLabel(self:GetSelectedScaling(profileId, answers))
+    local sourcePreset = self:GetSelectedSourcePreset(source)
+    local specLabel = source.class and source.spec and self:GetSpecLabel(source.class, source.spec) or nil
 
-    if tankStyleLabel then
-        table.insert(lines, "Current tank style: " .. tankStyleLabel .. ".")
+    if source.class then
+        table.insert(lines, "Selected class: " .. self:GetClassLabel(source.class) .. ".")
     end
 
-    if scalingLabel then
-        table.insert(lines, "Current scaling: " .. scalingLabel .. ".")
+    if specLabel then
+        table.insert(lines, "Selected spec: " .. specLabel .. ".")
+    elseif sourcePreset then
+        table.insert(lines, "Source preset: " .. sourcePreset.label .. ".")
     end
 
     return table.concat(lines, "\n")
@@ -1653,6 +1693,12 @@ function LS:GetEffectiveCapRules(profileId, answers)
     end
 
     local capRules = copyCapRules(profile.capRules)
+    local sourcePreset = self:GetSelectedSourcePreset(answers)
+
+    if sourcePreset and sourcePreset.caps then
+        applyCapRuleOverrides(capRules, sourcePreset.caps)
+    end
+
     local _, activeModifiers = self:GetActiveBuildModifiers(profileId, answers)
 
     for _, modifier in ipairs(activeModifiers) do
@@ -2165,16 +2211,12 @@ function LS:GetEffectiveWeights(profileId, answers)
     end
 
     local weights = copyTable(profile.weights)
-    local scalingGroup = profile.scalingGroup
-    local scaling = self:GetSelectedScaling(profileId, answers)
+    local sourcePreset = self:GetSelectedSourcePreset(answers)
 
-    if scalingGroup and scaling and self.scalingModifiers[scalingGroup] then
-        applyWeightModifiers(weights, self.scalingModifiers[scalingGroup][scaling])
-    end
-
-    local tankStyle = self:GetSelectedTankStyle(profileId, answers)
-    if tankStyle and self.tankStyleModifiers[tankStyle] then
-        applyWeightModifiers(weights, self.tankStyleModifiers[tankStyle])
+    if sourcePreset and sourcePreset.weights then
+        for statKey, value in pairs(sourcePreset.weights) do
+            weights[statKey] = value
+        end
     end
 
     local _, activeModifiers = self:GetActiveBuildModifiers(profileId, answers)
@@ -2317,6 +2359,19 @@ function LS:GetEditableWeightEntries(profileId)
         seen[statKey] = true
     end
 
+    for statKey, effectiveWeight in pairs(effectiveWeights) do
+        if not seen[statKey] then
+            table.insert(entries, {
+                statKey = statKey,
+                label = self.statLabels[statKey] or statKey,
+                baseWeight = profile.weights[statKey] or 0,
+                effectiveWeight = effectiveWeight,
+                customized = customWeights[statKey] ~= nil,
+            })
+            seen[statKey] = true
+        end
+    end
+
     for statKey, customValue in pairs(customWeights) do
         if not seen[statKey] then
             table.insert(entries, {
@@ -2389,121 +2444,64 @@ end
 function LS:GetWizardStepData(stepIndex, answers)
     if stepIndex == 1 then
         return {
-            title = "Step 1: What kind of build is this?",
-            description = "Pick the broad role first. You can fine-tune the exact preset in the next step.",
-            options = {
-                {
-                    value = "physical",
-                    title = "Physical DPS",
-                    description = "Weapons, attack power, crit, haste and similar offensive stats.",
-                },
-                {
-                    value = "spell",
-                    title = "Spell DPS",
-                    description = "Spell power, caster hit, crit, haste and mana-related caster stats.",
-                },
-                {
-                    value = "healer",
-                    title = "Healer",
-                    description = "Healing output or mana stability for support-focused builds.",
-                },
-                {
-                    value = "tank",
-                    title = "Tank",
-                    description = "Mitigation, stamina and threat generation for front-line builds.",
-                },
-            },
+            title = "Step 1: Which class should this start from?",
+            description = "Pick the class or archetype that best matches the stat-weight source you want to use.",
+            options = self:GetClassOptions(),
         }
     end
 
-    if not answers or not answers.role then
+    if not answers or not answers.class then
         return nil
     end
 
-    if stepIndex == 3 and answers.role == "physical" then
+    if stepIndex == 2 then
         return {
-            title = "Step 3: Which main stat drives this build?",
-            description = "Pick the primary stat scaling that best matches how this build actually gets value from gear.",
-            options = {
-                { value = "strength", title = "Strength-based", description = "Use this for builds that still want strength as the main stat driver." },
-                { value = "agility", title = "Agility-based", description = "Use this for setups that scale more from agility, dodge and crit." },
-            },
-        }
-    end
-
-    if stepIndex == 3 and answers.role == "tank" then
-        return {
-            title = "Step 3: Which tank style fits best?",
-            description = "Pick the mitigation style that best matches how this tank survives incoming damage.",
-            options = {
-                { value = "evasion", title = "Evasion", description = "Best for tanks that lean on agility, dodge and avoidance." },
-                { value = "block", title = "Block", description = "Best for shield tanks where block rating and block value matter a lot." },
-                { value = "health", title = "Health/Armor", description = "Best for tanks that want larger health pools and more raw armor." },
-            },
-        }
-    end
-
-    if stepIndex == 4 and answers.role == "tank" then
-        return {
-            title = "Step 4: Which main stat drives this build?",
-            description = "Pick the primary stat scaling that best matches how this tank gets value from gear.",
-            options = {
-                { value = "strength", title = "Strength-based", description = "Use this for shield or weapon-focused tanks that still want strength as the main stat driver." },
-                { value = "agility", title = "Agility-based", description = "Use this for tanks that scale more from agility, dodge and crit than from strength." },
-            },
-        }
-    end
-
-    if stepIndex ~= 2 then
-        return nil
-    end
-
-    if answers.role == "physical" then
-        return {
-            title = "Step 2: What should the gear lean toward?",
-            description = "Choose the version that best matches how the build actually deals damage.",
-            options = {
-                { value = "balanced", title = "Balanced", description = "General all-round physical DPS." },
-                { value = "crit", title = "Crit Focus", description = "Best when crit interactions matter more than raw speed." },
-                { value = "haste", title = "Haste Focus", description = "Best for fast swings, procs and speed-driven gameplay." },
-            },
-        }
-    end
-
-    if answers.role == "spell" then
-        return {
-            title = "Step 2: What kind of caster profile fits best?",
-            description = "Most casters should start with balanced unless crit synergies are central to the build.",
-            options = {
-                { value = "balanced", title = "Balanced Throughput", description = "Default caster profile with spell power, hit and haste." },
-                { value = "crit", title = "Crit Focus", description = "For builds that gain unusual value from spell crit." },
-            },
-        }
-    end
-
-    if answers.role == "healer" then
-        return {
-            title = "Step 2: What do you want your healing gear to solve?",
-            description = "Choose whether you care most about bigger heals now or lasting longer in mana-heavy fights.",
-            options = {
-                { value = "throughput", title = "Throughput", description = "More raw healing output and faster casts." },
-                { value = "efficiency", title = "Efficiency", description = "Stronger mana longevity and steadier sustain." },
-            },
-        }
-    end
-
-    if answers.role == "tank" then
-        return {
-            title = "Step 2: What is the tank gear priority?",
-            description = "Pick the style that better reflects your current need in groups or raids.",
-            options = {
-                { value = "mitigation", title = "Mitigation", description = "Safer, sturdier gearing for survival first." },
-                { value = "threat", title = "Threat", description = "More aggressive gearing while keeping core durability." },
-            },
+            title = "Step 2: Which spec fits this build?",
+            description = "Pick the spec you actually play so the addon can start from the right class-specific stat weights.",
+            options = self:GetSpecOptionsForClass(answers.class),
         }
     end
 
     return nil
+end
+
+function LS:UpgradeSetupData()
+    local setup = self.db and self.db.setup
+    if not setup then
+        return
+    end
+
+    local resolvedKey = self:ResolveSourcePresetKey(setup.sourcePreset)
+    if resolvedKey then
+        setup.sourcePreset = resolvedKey
+    end
+
+    local preset = self:GetSourcePresetFromAnswers(setup)
+    if preset then
+        setup.class = setup.class or preset.class
+        setup.spec = setup.spec or preset.spec
+        setup.role = preset.role or setup.role
+        setup.focus = nil
+        setup.tankStyle = nil
+        setup.scaling = nil
+        setup.recommendedProfile = setup.recommendedProfile or preset.profileId
+        return
+    end
+
+    if setup.class and setup.role and not setup.spec then
+        setup.spec = self:GetDefaultSpecForRole(setup.class, setup.role)
+        if setup.spec then
+            setup.sourcePreset = self:GetSourcePresetKeyFromAnswers(setup)
+            preset = self:GetSourcePresetFromAnswers(setup)
+            if preset then
+                setup.role = preset.role or setup.role
+                setup.focus = nil
+                setup.tankStyle = nil
+                setup.scaling = nil
+                setup.recommendedProfile = setup.recommendedProfile or preset.profileId
+            end
+        end
+    end
 end
 
 function LS:GetRecommendedProfileFromAnswers(answers)
@@ -2511,34 +2509,24 @@ function LS:GetRecommendedProfileFromAnswers(answers)
         return nil
     end
 
+    local sourcePreset = self:GetSourcePresetFromAnswers(answers)
+    if sourcePreset and sourcePreset.profileId then
+        return sourcePreset.profileId
+    end
+
     if answers.role == "physical" then
-        if answers.focus == "crit" then
-            return "physical_crit"
-        end
-        if answers.focus == "haste" then
-            return "physical_haste"
-        end
         return "physical_dps"
     end
 
     if answers.role == "spell" then
-        if answers.focus == "crit" then
-            return "spell_crit"
-        end
         return "spell_dps"
     end
 
     if answers.role == "healer" then
-        if answers.focus == "efficiency" then
-            return "healer_efficiency"
-        end
         return "healer_throughput"
     end
 
     if answers.role == "tank" then
-        if answers.focus == "threat" then
-            return "tank_threat"
-        end
         return "tank_mitigation"
     end
 

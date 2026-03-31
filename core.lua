@@ -2,6 +2,7 @@ local LS = _G.LootSuggestionAddon
 local GetInventoryItemLink = _G.GetInventoryItemLink
 local GetItemInfo = rawget(_G, "GetItemInfo")
 local GetSpellInfo = rawget(_G, "GetSpellInfo")
+local UnitClass = _G.UnitClass
 
 if not LS then
     LS = {}
@@ -22,11 +23,14 @@ LS.defaults = {
     caKnownPassiveNames = {},
     setup = {
         completed = false,
+        class = nil,
+        spec = nil,
         role = nil,
         focus = nil,
         tankStyle = nil,
         scaling = nil,
         recommendedProfile = nil,
+        sourcePreset = nil,
     },
     framePosition = {
         point = "CENTER",
@@ -215,6 +219,10 @@ function LS:InitializeDatabase()
 
     self.db = _G.LootSuggestion
     copyDefaults(self.defaults, self.db)
+
+    if self.UpgradeSetupData then
+        self:UpgradeSetupData()
+    end
 end
 
 function LS:GetActiveProfile()
@@ -250,6 +258,51 @@ function LS:SetSelectedProfile(profileId)
     self:Print("Active profile: " .. (self.GetProfileDisplayName and self:GetProfileDisplayName(profileId) or self.profiles[profileId].name))
 end
 
+function LS:SetSelectedClassSpec(classToken, specToken)
+    if not classToken or not specToken then
+        return false, "Missing class or spec."
+    end
+
+    local role = self.GetRoleForSpec and self:GetRoleForSpec(classToken, specToken) or nil
+    if not role then
+        return false, "Unknown spec for class."
+    end
+
+    local answers = {
+        class = classToken,
+        spec = specToken,
+        role = role,
+    }
+    answers.sourcePreset = self.GetSourcePresetKeyFromAnswers and self:GetSourcePresetKeyFromAnswers(answers) or nil
+
+    local profileId = self.GetRecommendedProfileFromAnswers and self:GetRecommendedProfileFromAnswers(answers) or nil
+    if not profileId or not self.profiles or not self.profiles[profileId] then
+        return false, "Unable to resolve a profile for that spec."
+    end
+
+    self.db.setup.completed = true
+    self.db.setup.class = classToken
+    self.db.setup.spec = specToken
+    self.db.setup.role = role
+    self.db.setup.focus = nil
+    self.db.setup.tankStyle = nil
+    self.db.setup.scaling = nil
+    self.db.setup.recommendedProfile = profileId
+    self.db.setup.sourcePreset = answers.sourcePreset
+    self.db.selectedProfile = profileId
+
+    if self.InvalidateTooltipCaches then
+        self:InvalidateTooltipCaches()
+    end
+
+    if self.RefreshUI then
+        self:RefreshUI()
+    end
+
+    self:Print("Active build: " .. self:GetClassLabel(classToken) .. " / " .. self:GetSpecLabel(classToken, specToken))
+    return true
+end
+
 function LS:StartSetupWizard()
     if self.OpenSetupModeSelector then
         self:OpenSetupModeSelector()
@@ -270,11 +323,17 @@ function LS:StartGuidedSetupWizard()
     end
 
     self.wizardAnswers = {
+        class = self.db.setup.class,
+        spec = self.db.setup.spec,
         role = self.db.setup.role,
-        focus = self.db.setup.focus,
-        tankStyle = self.db.setup.tankStyle,
-        scaling = self.db.setup.scaling,
+        sourcePreset = self.db.setup.sourcePreset,
     }
+
+    if not self.wizardAnswers.class and UnitClass then
+        local _, classToken = UnitClass("player")
+        self.wizardAnswers.class = classToken
+    end
+
     self.weightEditorOpen = false
     self.capEditorOpen = false
     self.priorityWizardOpen = false
@@ -302,11 +361,14 @@ function LS:FinishSetupWizard(profileId)
     end
 
     self.db.setup.completed = true
+    self.db.setup.class = self.wizardAnswers and self.wizardAnswers.class or nil
+    self.db.setup.spec = self.wizardAnswers and self.wizardAnswers.spec or nil
     self.db.setup.role = self.wizardAnswers and self.wizardAnswers.role or nil
-    self.db.setup.focus = self.wizardAnswers and self.wizardAnswers.focus or nil
-    self.db.setup.tankStyle = self.wizardAnswers and self.wizardAnswers.tankStyle or nil
-    self.db.setup.scaling = self.wizardAnswers and self.wizardAnswers.scaling or nil
+    self.db.setup.focus = nil
+    self.db.setup.tankStyle = nil
+    self.db.setup.scaling = nil
     self.db.setup.recommendedProfile = profileId
+    self.db.setup.sourcePreset = self.wizardAnswers and self.wizardAnswers.sourcePreset or nil
     self.wizardStep = nil
 
     self:SetSelectedProfile(profileId)
@@ -326,6 +388,24 @@ function LS:GetComparisonTarget(itemLink)
     local _, _, _, _, _, _, _, _, equipLoc = GetItemInfo(itemLink)
     if not equipLoc or equipLoc == "" then
         return nil
+    end
+
+    if equipLoc == "INVTYPE_WEAPON" then
+        local mainHandLoc = self:GetItemEquipLocation(GetInventoryItemLink("player", 16))
+        local offHandLoc = self:GetItemEquipLocation(GetInventoryItemLink("player", 17))
+        local candidateSlots = {}
+
+        if mainHandLoc ~= "INVTYPE_2HWEAPON" then
+            table.insert(candidateSlots, 16)
+        end
+
+        if not offHandLoc or offHandLoc == "INVTYPE_WEAPON" or offHandLoc == "INVTYPE_WEAPONOFFHAND" then
+            table.insert(candidateSlots, 17)
+        end
+
+        if candidateSlots[1] then
+            return candidateSlots
+        end
     end
 
     return self.equipLocToSlots[equipLoc]

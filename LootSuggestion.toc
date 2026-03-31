@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: LootSuggestion
 ## Author: Akkio
-## Version: 1.0.0
+## Version: 1.1.0
 ## DefaultState: Enabled
 ## Notes: Preset-based gear scoring for Ascension and WoW 3.3.5.
 
@@ -9,5 +9,14 @@
 
 core.lua
 profiles.lua
+ClassWeights\Warrior\presets.lua
+ClassWeights\Paladin\presets.lua
+ClassWeights\Hunter\presets.lua
+ClassWeights\Rogue\presets.lua
+ClassWeights\Priest\presets.lua
+ClassWeights\Shaman\presets.lua
+ClassWeights\Mage\presets.lua
+ClassWeights\Warlock\presets.lua
+ClassWeights\Druid\presets.lua
 ui.lua
 tooltip.lua

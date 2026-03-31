@@ -111,6 +111,11 @@ local function createCustomButton(parent, width, height, title, detail)
     local button = CreateFrame("Button", nil, parent)
     button:SetWidth(width)
     button:SetHeight(height)
+    button:EnableMouse(true)
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    if parent and parent.GetFrameLevel then
+        button:SetFrameLevel(parent:GetFrameLevel() + 5)
+    end
     applyBackdrop(button, THEME.button, THEME.border)
 
     button.accent = button:CreateTexture(nil, "ARTWORK")
@@ -360,8 +365,8 @@ function LS:CreateMainFrame()
     end
 
     local frame = CreateFrame("Frame", "LootSuggestionMainFrame", UIParent)
-    frame:SetWidth(930)
-    frame:SetHeight(760)
+    frame:SetWidth(1200)
+    frame:SetHeight(1000)
     frame:SetPoint(
         self.db.framePosition.point,
         UIParent,
@@ -398,92 +403,122 @@ function LS:CreateMainFrame()
 
     local subtitle = frame.header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    subtitle:SetText("Pick a profile, tune weights and caps, then hover items to compare upgrades.")
+    subtitle:SetText("Choose a class and spec, tune weights and caps, then hover items to compare upgrades.")
     subtitle:SetTextColor(THEME.dimText[1], THEME.dimText[2], THEME.dimText[3])
 
     local closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -8, -8)
 
-    frame.leftPanel = createPanel(frame, "TOPLEFT", frame.header, "BOTTOMLEFT", 0, -12, 260, 672, THEME.inset)
-    frame.rightPanel = createPanel(frame, "TOPLEFT", frame.leftPanel, "TOPRIGHT", 14, 0, 632, 672, THEME.inset)
+    frame.leftPanel = createPanel(frame, "TOPLEFT", frame.header, "BOTTOMLEFT", 0, -12, 320, 912, THEME.inset)
+    frame.rightPanel = createPanel(frame, "TOPLEFT", frame.leftPanel, "TOPRIGHT", 14, 0, 842, 912, THEME.inset)
 
-    local leftTitle = createSectionTitle(frame.leftPanel, "Preset Profiles", "TOPLEFT", frame.leftPanel, "TOPLEFT", 14, -14)
-    local leftText = createBodyText(frame.leftPanel, 228, "GameFontHighlightSmall")
+    local leftTitle = createSectionTitle(frame.leftPanel, "Class / Spec", "TOPLEFT", frame.leftPanel, "TOPLEFT", 14, -14)
+    local leftText = createBodyText(frame.leftPanel, 288, "GameFontHighlightSmall")
     leftText:SetPoint("TOPLEFT", leftTitle, "BOTTOMLEFT", 0, -6)
-    leftText:SetText("Choose the profile that best matches how the character plays. The right side explains what each preset values most.")
+    leftText:SetText("Select the class first, then choose the spec you want to score around.")
 
-    frame.profileButtons = {}
-    local previousButton = leftText
-    for _, profileId in ipairs(self.profileOrder) do
-        local profile = self.profiles[profileId]
-        local button = createProfileButton(frame.leftPanel, profile)
-        button.profileId = profileId
-        if previousButton == leftText then
-            button:SetPoint("TOPLEFT", leftText, "BOTTOMLEFT", 0, -14)
-        else
-            button:SetPoint("TOPLEFT", previousButton, "BOTTOMLEFT", 0, -4)
-        end
-        button.text:SetText(profile.name)
-        button:SetScript("OnClick", function()
-            LS:SetSelectedProfile(profileId)
+    local classTitle = createSectionTitle(frame.leftPanel, "Class", "TOPLEFT", leftText, "BOTTOMLEFT", 0, -18)
+    frame.classButtons = {}
+    local classButtonWidth = 138
+    local classButtonHeight = 32
+    local classButtonSpacing = 6
+    local lastClassButton = nil
+    for index, classOption in ipairs(self.classChoices or {}) do
+        local classToken = classOption.value
+        local column = (index - 1) % 2
+        local row = math.floor((index - 1) / 2)
+        local button = createCustomButton(frame.leftPanel, classButtonWidth, classButtonHeight, classOption.title)
+        button:SetPoint("TOPLEFT", classTitle, "BOTTOMLEFT", column * (classButtonWidth + classButtonSpacing), -12 - row * (classButtonHeight + classButtonSpacing))
+        button.text:ClearAllPoints()
+        button.text:SetPoint("CENTER", 6, 0)
+        button.classToken = classToken
+        button:SetScript("OnClick", function(clickedButton)
+            LS.mainFrame.classBrowserClass = clickedButton.classToken
+            LS:RefreshUI()
         end)
-        frame.profileButtons[profileId] = button
-        previousButton = button
+        frame.classButtons[classToken] = button
+        lastClassButton = button
     end
 
-    frame.utilityPanel = createPanel(frame.leftPanel, "BOTTOMLEFT", frame.leftPanel, "BOTTOMLEFT", 12, 12, 236, 190, THEME.panel)
+    local specTitle = createSectionTitle(frame.leftPanel, "Spec", "TOPLEFT", lastClassButton or classTitle, "BOTTOMLEFT", 0, -18)
+    frame.specHint = createBodyText(frame.leftPanel, 288, "GameFontHighlightSmall")
+    frame.specHint:SetPoint("TOPLEFT", specTitle, "BOTTOMLEFT", 0, -6)
+    frame.specHint:SetText("Pick a class to see its available specs.")
 
-    frame.recommendationText = createBodyText(frame.utilityPanel, 212, "GameFontHighlightSmall")
+    frame.specButtons = {}
+    local previousSpecButton = frame.specHint
+    for index = 1, 5 do
+        local button = createCustomButton(frame.leftPanel, 288, 42, "", "")
+        if previousSpecButton == frame.specHint then
+            button:SetPoint("TOPLEFT", frame.specHint, "BOTTOMLEFT", 0, -12)
+        else
+            button:SetPoint("TOPLEFT", previousSpecButton, "BOTTOMLEFT", 0, -6)
+        end
+        button:Hide()
+        button:SetScript("OnClick", function(clickedButton)
+            if not clickedButton.classToken or not clickedButton.specToken then
+                return
+            end
+            LS.mainFrame.classBrowserClass = clickedButton.classToken
+            LS:SetSelectedClassSpec(clickedButton.classToken, clickedButton.specToken)
+        end)
+        frame.specButtons[index] = button
+        previousSpecButton = button
+    end
+
+    frame.utilityPanel = createPanel(frame.leftPanel, "BOTTOMLEFT", frame.leftPanel, "BOTTOMLEFT", 12, 12, 296, 190, THEME.panel)
+
+    frame.recommendationText = createBodyText(frame.utilityPanel, 272, "GameFontHighlightSmall")
     frame.recommendationText:SetPoint("TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -12)
     frame.recommendationText:SetText("")
 
-    frame.utilityDivider = createAccentLine(frame.utilityPanel, "TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -40, 212)
+    frame.utilityDivider = createAccentLine(frame.utilityPanel, "TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -40, 272)
 
-    frame.setupButton = createActionButton(frame.utilityPanel, 212, 28, "Run Setup Wizard")
+    frame.setupButton = createActionButton(frame.utilityPanel, 272, 28, "Run Setup Wizard")
     frame.setupButton:SetPoint("TOPLEFT", frame.utilityPanel, "TOPLEFT", 12, -52)
     frame.setupButton:SetScript("OnClick", function()
         LS:StartSetupWizard()
     end)
 
-    frame.editWeightsButton = createActionButton(frame.utilityPanel, 212, 28, "Edit Active Weights")
+    frame.editWeightsButton = createActionButton(frame.utilityPanel, 272, 28, "Edit Active Weights")
     frame.editWeightsButton:SetPoint("TOPLEFT", frame.setupButton, "BOTTOMLEFT", 0, -5)
     frame.editWeightsButton:SetScript("OnClick", function()
         LS:OpenWeightEditor()
     end)
 
-    frame.editCapsButton = createActionButton(frame.utilityPanel, 212, 28, "Edit Active Caps")
+    frame.editCapsButton = createActionButton(frame.utilityPanel, 272, 28, "Edit Active Caps")
     frame.editCapsButton:SetPoint("TOPLEFT", frame.editWeightsButton, "BOTTOMLEFT", 0, -5)
     frame.editCapsButton:SetScript("OnClick", function()
         LS:OpenCapEditor()
     end)
 
-    frame.priorityWizardButton = createActionButton(frame.utilityPanel, 212, 28, "Priority Wizard")
+    frame.priorityWizardButton = createActionButton(frame.utilityPanel, 272, 28, "Priority Wizard")
     frame.priorityWizardButton:SetPoint("TOPLEFT", frame.editCapsButton, "BOTTOMLEFT", 0, -5)
     frame.priorityWizardButton:SetScript("OnClick", function()
         LS:OpenPriorityWizard()
     end)
 
-    frame.profileCard = createPanel(frame.rightPanel, "TOPLEFT", frame.rightPanel, "TOPLEFT", 12, -12, 608, 92, THEME.panel)
+    frame.profileCard = createPanel(frame.rightPanel, "TOPLEFT", frame.rightPanel, "TOPLEFT", 12, -12, 818, 108, THEME.panel)
     frame.profileName = frame.profileCard:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     frame.profileName:SetPoint("TOPLEFT", 14, -12)
     frame.profileName:SetTextColor(THEME.brightText[1], THEME.brightText[2], THEME.brightText[3])
 
-    frame.profileSummary = createBodyText(frame.profileCard, 580)
+    frame.profileSummary = createBodyText(frame.profileCard, 790)
     frame.profileSummary:SetPoint("TOPLEFT", frame.profileName, "BOTTOMLEFT", 0, -8)
 
-    frame.metricsCard = createPanel(frame.rightPanel, "TOPLEFT", frame.profileCard, "BOTTOMLEFT", 0, -12, 608, 72, THEME.panel)
+    frame.metricsCard = createPanel(frame.rightPanel, "TOPLEFT", frame.profileCard, "BOTTOMLEFT", 0, -12, 818, 82, THEME.panel)
     frame.metricsTitle = createSectionTitle(frame.metricsCard, "Priority Snapshot", "TOPLEFT", frame.metricsCard, "TOPLEFT", 14, -12)
-    frame.profilePriority = createBodyText(frame.metricsCard, 580)
+    frame.profilePriority = createBodyText(frame.metricsCard, 790)
     frame.profilePriority:SetPoint("TOPLEFT", frame.metricsTitle, "BOTTOMLEFT", 0, -8)
 
-    frame.playstyleCard = createPanel(frame.rightPanel, "TOPLEFT", frame.metricsCard, "BOTTOMLEFT", 0, -12, 608, 88, THEME.panel)
+    frame.playstyleCard = createPanel(frame.rightPanel, "TOPLEFT", frame.metricsCard, "BOTTOMLEFT", 0, -12, 818, 96, THEME.panel)
     frame.playstyleTitle = createSectionTitle(frame.playstyleCard, "Playstyle", "TOPLEFT", frame.playstyleCard, "TOPLEFT", 14, -12)
-    frame.profilePlaystyle = createBodyText(frame.playstyleCard, 580)
+    frame.profilePlaystyle = createBodyText(frame.playstyleCard, 790)
     frame.profilePlaystyle:SetPoint("TOPLEFT", frame.playstyleTitle, "BOTTOMLEFT", 0, -8)
 
-    frame.optionsCard = createPanel(frame.rightPanel, "TOPLEFT", frame.playstyleCard, "BOTTOMLEFT", 0, -12, 608, 190, THEME.panel)
+    frame.optionsCard = createPanel(frame.rightPanel, "TOPLEFT", frame.playstyleCard, "BOTTOMLEFT", 0, -12, 818, 206, THEME.panel)
     frame.optionsTitle = createSectionTitle(frame.optionsCard, "Scoring Options", "TOPLEFT", frame.optionsCard, "TOPLEFT", 14, -12)
-    frame.optionsHint = createBodyText(frame.optionsCard, 580, "GameFontHighlightSmall")
+    frame.optionsHint = createBodyText(frame.optionsCard, 790, "GameFontHighlightSmall")
     frame.optionsHint:SetPoint("TOPLEFT", frame.optionsTitle, "BOTTOMLEFT", 0, -6)
     frame.optionsHint:SetText("These affect what appears in tooltips and how comparison details are shown while you play.")
 
@@ -525,8 +560,8 @@ function LS:CreateMainFrame()
         LS:ResetSettings()
     end)
 
-    frame.footerCard = createPanel(frame.rightPanel, "TOPLEFT", frame.optionsCard, "BOTTOMLEFT", 0, -12, 608, 45, THEME.panel)
-    frame.footerText = createBodyText(frame.footerCard, 580, "GameFontHighlightSmall")
+    frame.footerCard = createPanel(frame.rightPanel, "TOPLEFT", frame.optionsCard, "BOTTOMLEFT", 0, -12, 818, 52, THEME.panel)
+    frame.footerText = createBodyText(frame.footerCard, 790, "GameFontHighlightSmall")
     frame.footerText:SetPoint("TOPLEFT", frame.footerCard, "TOPLEFT", 14, -13)
     frame.footerText:SetText("Slash commands: /ls, /ls setup, /ls edit, /ls capedit, /ls weights, /ls caps")
 
@@ -537,7 +572,7 @@ function LS:CreateMainFrame()
     setupMode:SetFrameLevel(frame:GetFrameLevel() + 31)
     setupMode.title = setupModeModal.title
     setupMode.description = setupModeModal.description
-    setupMode.simpleButton = createCustomButton(setupModeModal, 512, 56, "Simple Setup", "Uses the normal guided wizard with role, focus and build-specific questions.")
+    setupMode.simpleButton = createCustomButton(setupModeModal, 512, 56, "Simple Setup", "Uses the normal guided wizard with class and spec questions.")
     setupMode.simpleButton:SetPoint("TOPLEFT", setupMode.description, "BOTTOMLEFT", 0, -24)
     setupMode.advancedButton = createCustomButton(setupModeModal, 512, 56, "Advanced Priority Wizard", "Jumps directly to manual stat priority ordering for the active profile.")
     setupMode.advancedButton:SetPoint("TOPLEFT", setupMode.simpleButton, "BOTTOMLEFT", 0, -12)
@@ -557,7 +592,7 @@ function LS:CreateMainFrame()
     end)
     self.setupModeFrame = setupMode
 
-    local wizardOverlay, wizardModal = createModalFrame(frame, "Setup Wizard", "Answer a few simple questions and LootSuggestion will recommend a starting profile for you.", 788, 470)
+    local wizardOverlay, wizardModal = createModalFrame(frame, "Setup Wizard", "Answer a few simple questions and LootSuggestion will recommend a starting profile for you.", 788, 560)
     local wizard = wizardOverlay
     wizard:SetFrameLevel(frame:GetFrameLevel() + 30)
     wizard.progress = wizardModal.header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -567,20 +602,17 @@ function LS:CreateMainFrame()
     wizard.title = wizardModal.title
     wizard.description = wizardModal.description
     wizard.optionButtons = {}
-    local previousOption
-    for index = 1, 4 do
-        local button = createCustomButton(wizardModal, 730, 42, "", "")
-        if index == 1 then
-            button:SetPoint("TOPLEFT", wizard.description, "BOTTOMLEFT", 0, -18)
-        else
-            button:SetPoint("TOPLEFT", previousOption, "BOTTOMLEFT", 0, -10)
-        end
-        button.detail:SetWidth(700)
+    local buttonColumns = { 0, 372 }
+    for index = 1, 10 do
+        local button = createCustomButton(wizardModal, 356, 38, "", "")
+        local column = ((index - 1) % 2) + 1
+        local row = math.floor((index - 1) / 2)
+        button:SetPoint("TOPLEFT", wizard.description, "BOTTOMLEFT", buttonColumns[column], -18 - (row * 48))
+        button.detail:SetWidth(326)
         wizard.optionButtons[index] = button
-        previousOption = button
     end
 
-    wizard.summaryPanel = createPanel(wizardModal, "TOPLEFT", previousOption, "BOTTOMLEFT", 0, -18, 730, 102, THEME.inset)
+    wizard.summaryPanel = createPanel(wizardModal, "TOPLEFT", wizard.optionButtons[9], "BOTTOMLEFT", 0, -18, 730, 102, THEME.inset)
     wizard.summaryHeader = createSectionTitle(wizard.summaryPanel, "Recommended Result", "TOPLEFT", wizard.summaryPanel, "TOPLEFT", 14, -12)
     wizard.summaryText = createBodyText(wizard.summaryPanel, 700)
     wizard.summaryText:SetPoint("TOPLEFT", wizard.summaryHeader, "BOTTOMLEFT", 0, -8)
@@ -599,14 +631,9 @@ function LS:CreateMainFrame()
         LS.wizardStep = LS.wizardStep - 1
         if LS.wizardAnswers then
             if previousStep == 2 then
-                LS.wizardAnswers.focus = nil
-                LS.wizardAnswers.tankStyle = nil
-                LS.wizardAnswers.scaling = nil
-            elseif previousStep == 3 then
-                LS.wizardAnswers.tankStyle = nil
-                LS.wizardAnswers.scaling = nil
-            elseif previousStep == 4 then
-                LS.wizardAnswers.scaling = nil
+                LS.wizardAnswers.spec = nil
+                LS.wizardAnswers.role = nil
+                LS.wizardAnswers.sourcePreset = nil
             end
         end
         LS:RefreshUI()
@@ -872,45 +899,21 @@ function LS:RefreshWizard()
             button.detail:SetText(option.description)
             button:SetScript("OnClick", function()
                 if step == 1 then
-                    LS.wizardAnswers.role = option.value
-                    LS.wizardAnswers.focus = nil
-                    LS.wizardAnswers.tankStyle = nil
-                    LS.wizardAnswers.scaling = nil
+                    LS.wizardAnswers.class = option.value
+                    LS.wizardAnswers.spec = nil
+                    LS.wizardAnswers.role = nil
+                    LS.wizardAnswers.sourcePreset = nil
                     LS.wizardStep = 2
                     LS:RefreshUI()
                     return
                 end
 
                 if step == 2 then
-                    LS.wizardAnswers.focus = option.value
-                    LS.wizardAnswers.tankStyle = nil
-                    LS.wizardAnswers.scaling = nil
-                    if LS:RoleUsesTankStyle(LS.wizardAnswers.role) then
-                        LS.wizardStep = 3
-                        LS:RefreshUI()
-                        return
-                    end
-
-                    if LS:RoleUsesScaling(LS.wizardAnswers.role) then
-                        LS.wizardAnswers.scaling = nil
-                        LS.wizardStep = 3
-                        LS:RefreshUI()
-                        return
-                    end
-
-                    LS:FinishSetupWizard(LS:GetRecommendedProfileFromAnswers(LS.wizardAnswers))
-                    return
+                    LS.wizardAnswers.spec = option.value
+                    LS.wizardAnswers.role = option.role or LS:GetRoleForSpec(LS.wizardAnswers.class, option.value)
+                    LS.wizardAnswers.sourcePreset = LS:GetSourcePresetKeyFromAnswers(LS.wizardAnswers)
                 end
 
-                if step == 3 and LS:RoleUsesTankStyle(LS.wizardAnswers.role) then
-                    LS.wizardAnswers.tankStyle = option.value
-                    LS.wizardAnswers.scaling = nil
-                    LS.wizardStep = 4
-                    LS:RefreshUI()
-                    return
-                end
-
-                LS.wizardAnswers.scaling = option.value
                 LS:FinishSetupWizard(LS:GetRecommendedProfileFromAnswers(LS.wizardAnswers))
             end)
         else
@@ -938,6 +941,7 @@ function LS:RefreshWizard()
     else
         self.wizardFrame.backButton:Enable()
         setCustomButtonState(self.wizardFrame.backButton, false)
+        self.wizardFrame.backButton.text:SetTextColor(0.92, 0.88, 0.77)
     end
 end
 
@@ -1139,43 +1143,95 @@ function LS:RefreshUI()
         return
     end
 
-    self.mainFrame.profileName:SetText(self:GetProfileDisplayName(profileId))
-    self.mainFrame.profileSummary:SetText(self:GetProfileSummaryText(profileId, profile))
+    local activeClass = self.db.setup and self.db.setup.class or nil
+    local activeSpec = self.db.setup and self.db.setup.spec or nil
+    if activeClass and activeSpec then
+        self.mainFrame.profileName:SetText(self:GetClassLabel(activeClass) .. " / " .. self:GetSpecLabel(activeClass, activeSpec))
+        self.mainFrame.profileSummary:SetText(self:GetProfileSummaryText(profileId, profile) .. "\nEngine profile: " .. self:GetProfileDisplayName(profileId))
+    else
+        self.mainFrame.profileName:SetText(self:GetProfileDisplayName(profileId))
+        self.mainFrame.profileSummary:SetText(self:GetProfileSummaryText(profileId, profile))
+    end
     self.mainFrame.profilePlaystyle:SetText(profile.playstyle)
     self.mainFrame.profilePriority:SetText(self:GetProfilePriorityText(profile))
 
     local recommendedProfileId = self.db.setup and self.db.setup.recommendedProfile
     local customWeightCount = self:GetCustomWeightCount(profileId)
     local customCapCount = self:GetCustomCapCount(profileId)
+    local recommendationLines = {}
+    if activeClass and activeSpec then
+        recommendationLines[#recommendationLines + 1] = "Current build: " .. self:GetClassLabel(activeClass) .. " / " .. self:GetSpecLabel(activeClass, activeSpec)
+    end
     if recommendedProfileId and self.profiles[recommendedProfileId] then
-        local text = "Recommended: " .. self:GetProfileDisplayName(recommendedProfileId)
+        recommendationLines[#recommendationLines + 1] = "Engine profile: " .. self:GetProfileDisplayName(recommendedProfileId)
         if customWeightCount > 0 then
-            text = text .. "\nWeight overrides: " .. customWeightCount
+            recommendationLines[#recommendationLines + 1] = "Weight overrides: " .. customWeightCount
         end
         if customCapCount > 0 then
-            text = text .. "\nCap overrides: " .. customCapCount
+            recommendationLines[#recommendationLines + 1] = "Cap overrides: " .. customCapCount
         end
-        self.mainFrame.recommendationText:SetText(text)
     else
-        local text = "Run setup for a guided starting profile."
+        recommendationLines[#recommendationLines + 1] = "Run setup for a guided starting build."
         if customWeightCount > 0 then
-            text = text .. "\nWeight overrides: " .. customWeightCount
+            recommendationLines[#recommendationLines + 1] = "Weight overrides: " .. customWeightCount
         end
         if customCapCount > 0 then
-            text = text .. "\nCap overrides: " .. customCapCount
+            recommendationLines[#recommendationLines + 1] = "Cap overrides: " .. customCapCount
         end
-        self.mainFrame.recommendationText:SetText(text)
     end
 
-    for buttonProfileId, button in pairs(self.mainFrame.profileButtons) do
-        local selected = buttonProfileId == profileId
-        button.isSelected = selected
-        if selected then
-            button:Disable()
-        else
-            button:Enable()
+    self.mainFrame.recommendationText:SetText(table.concat(recommendationLines, "\n"))
+
+    local browserClass = self.mainFrame.classBrowserClass or activeClass
+    if not browserClass then
+        if UnitClass then
+            browserClass = select(2, UnitClass("player"))
         end
+        if (not browserClass) and self.classChoices and self.classChoices[1] then
+            browserClass = self.classChoices[1].value
+        end
+        self.mainFrame.classBrowserClass = browserClass
+    end
+
+    for classToken, button in pairs(self.mainFrame.classButtons or {}) do
+        local selected = classToken == browserClass
+        button.isSelected = selected
+        button:Enable()
         setCustomButtonState(button, selected)
+    end
+
+    local specOptions = browserClass and self:GetSpecOptionsForClass(browserClass) or nil
+    if browserClass and self.mainFrame.specHint then
+        self.mainFrame.specHint:SetText("Choose the spec for " .. self:GetClassLabel(browserClass))
+    elseif self.mainFrame.specHint then
+        self.mainFrame.specHint:SetText("Pick a class to see its available specs.")
+    end
+
+    for index, button in ipairs(self.mainFrame.specButtons or {}) do
+        local specOption = specOptions and specOptions[index] or nil
+        if specOption then
+            local specToken = specOption.value
+            button.classToken = browserClass
+            button.specToken = specToken
+            button.text:SetText(specOption.title)
+            if button.detail then
+                button.detail:SetText(specOption.description or "")
+            end
+            button:Show()
+            local selected = browserClass == activeClass and specToken == activeSpec
+            button.isSelected = selected
+            if selected then
+                button:Disable()
+            else
+                button:Enable()
+            end
+            setCustomButtonState(button, selected)
+        else
+            button.classToken = nil
+            button.specToken = nil
+            button.isSelected = false
+            button:Hide()
+        end
     end
 
     self.mainFrame.showScoresCheck:SetChecked(self.db.showTooltipScores)
