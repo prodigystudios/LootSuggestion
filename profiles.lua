@@ -8,6 +8,22 @@ local UnitRace = _G.UnitRace
 local UIParent = _G.UIParent
 local DAMAGE_TEMPLATE = rawget(_G, "DAMAGE_TEMPLATE")
 local ITEM_SPEED = rawget(_G, "ITEM_SPEED")
+local ITEM_SPELL_TRIGGER_ONEQUIP = rawget(_G, "ITEM_SPELL_TRIGGER_ONEQUIP")
+local ITEM_MOD_SPELL_POWER = rawget(_G, "ITEM_MOD_SPELL_POWER")
+local ITEM_MOD_SPELL_DAMAGE_DONE = rawget(_G, "ITEM_MOD_SPELL_DAMAGE_DONE")
+local ITEM_MOD_HEALING_DONE = rawget(_G, "ITEM_MOD_HEALING_DONE")
+local ITEM_MOD_ARCANE_SPELL_POWER = rawget(_G, "ITEM_MOD_ARCANE_SPELL_POWER")
+local ITEM_MOD_FIRE_SPELL_POWER = rawget(_G, "ITEM_MOD_FIRE_SPELL_POWER")
+local ITEM_MOD_FROST_SPELL_POWER = rawget(_G, "ITEM_MOD_FROST_SPELL_POWER")
+local ITEM_MOD_HOLY_SPELL_POWER = rawget(_G, "ITEM_MOD_HOLY_SPELL_POWER")
+local ITEM_MOD_NATURE_SPELL_POWER = rawget(_G, "ITEM_MOD_NATURE_SPELL_POWER")
+local ITEM_MOD_SHADOW_SPELL_POWER = rawget(_G, "ITEM_MOD_SHADOW_SPELL_POWER")
+local ITEM_MOD_ARCANE_DAMAGE_DONE = rawget(_G, "ITEM_MOD_ARCANE_DAMAGE_DONE")
+local ITEM_MOD_FIRE_DAMAGE_DONE = rawget(_G, "ITEM_MOD_FIRE_DAMAGE_DONE")
+local ITEM_MOD_FROST_DAMAGE_DONE = rawget(_G, "ITEM_MOD_FROST_DAMAGE_DONE")
+local ITEM_MOD_HOLY_DAMAGE_DONE = rawget(_G, "ITEM_MOD_HOLY_DAMAGE_DONE")
+local ITEM_MOD_NATURE_DAMAGE_DONE = rawget(_G, "ITEM_MOD_NATURE_DAMAGE_DONE")
+local ITEM_MOD_SHADOW_DAMAGE_DONE = rawget(_G, "ITEM_MOD_SHADOW_DAMAGE_DONE")
 
 local weaponStatTooltip = CreateFrame("GameTooltip", "LootSuggestionWeaponStatTooltip", UIParent, "GameTooltipTemplate")
 weaponStatTooltip:SetOwner(UIParent, "ANCHOR_NONE")
@@ -39,6 +55,7 @@ function LS:InvalidateTooltipCaches()
     self.itemScoreCache = {}
     self.weaponStatCache = {}
     self.equippedStatTotalCache = {}
+    self.itemTooltipStatCache = {}
 end
 
 LS.statDefinitions = {
@@ -52,7 +69,26 @@ LS.statDefinitions = {
     { key = "weaponDps", label = "Weapon DPS", keys = {} },
     { key = "weaponDamage", label = "Weapon Damage", keys = {} },
     { key = "attackSpeed", label = "Attack Speed", keys = {} },
-    { key = "spellPower", label = "Spell Power", keys = { "ITEM_MOD_SPELL_POWER_SHORT", "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT", "ITEM_MOD_HEALING_DONE_SHORT" } },
+    { key = "spellPower", label = "Spell Power", keys = {
+        "ITEM_MOD_SPELL_POWER_SHORT",
+        "ITEM_MOD_SPELL_POWER",
+        "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT",
+        "ITEM_MOD_SPELL_DAMAGE_DONE",
+        "ITEM_MOD_HEALING_DONE_SHORT",
+        "ITEM_MOD_HEALING_DONE",
+        "ITEM_MOD_ARCANE_SPELL_POWER",
+        "ITEM_MOD_FIRE_SPELL_POWER",
+        "ITEM_MOD_FROST_SPELL_POWER",
+        "ITEM_MOD_HOLY_SPELL_POWER",
+        "ITEM_MOD_NATURE_SPELL_POWER",
+        "ITEM_MOD_SHADOW_SPELL_POWER",
+        "ITEM_MOD_ARCANE_DAMAGE_DONE",
+        "ITEM_MOD_FIRE_DAMAGE_DONE",
+        "ITEM_MOD_FROST_DAMAGE_DONE",
+        "ITEM_MOD_HOLY_DAMAGE_DONE",
+        "ITEM_MOD_NATURE_DAMAGE_DONE",
+        "ITEM_MOD_SHADOW_DAMAGE_DONE",
+    } },
     { key = "spellPen", label = "Spell Penetration", keys = { "ITEM_MOD_SPELL_PENETRATION_SHORT", "ITEM_MOD_TARGET_RESISTANCE_SHORT" } },
     { key = "hitRating", label = "Hit Rating", keys = { "ITEM_MOD_HIT_RATING_SHORT", "ITEM_MOD_HIT_MELEE_RATING_SHORT", "ITEM_MOD_HIT_SPELL_RATING_SHORT", "ITEM_MOD_HIT_RANGED_RATING_SHORT" } },
     { key = "critRating", label = "Crit Rating", keys = { "ITEM_MOD_CRIT_RATING_SHORT", "ITEM_MOD_CRIT_MELEE_RATING_SHORT", "ITEM_MOD_CRIT_SPELL_RATING_SHORT", "ITEM_MOD_CRIT_RANGED_RATING_SHORT" } },
@@ -247,6 +283,36 @@ end
 local DAMAGE_LINE_PATTERN = buildTooltipValuePattern(DAMAGE_TEMPLATE or "%d - %d Damage")
 local SPEED_LINE_PATTERN = "^" .. escapePattern(ITEM_SPEED or "Speed") .. "%s+([%d%.,]+)$"
 
+local function buildTooltipStatPatterns(templates)
+    local patterns = {}
+
+    for _, template in ipairs(templates or {}) do
+        if type(template) == "string" and template ~= "" then
+            table.insert(patterns, buildTooltipValuePattern(template))
+        end
+    end
+
+    return patterns
+end
+
+local SPELL_POWER_TOOLTIP_PATTERNS = buildTooltipStatPatterns({
+    ITEM_MOD_SPELL_POWER,
+    ITEM_MOD_SPELL_DAMAGE_DONE,
+    ITEM_MOD_HEALING_DONE,
+    ITEM_MOD_ARCANE_SPELL_POWER,
+    ITEM_MOD_FIRE_SPELL_POWER,
+    ITEM_MOD_FROST_SPELL_POWER,
+    ITEM_MOD_HOLY_SPELL_POWER,
+    ITEM_MOD_NATURE_SPELL_POWER,
+    ITEM_MOD_SHADOW_SPELL_POWER,
+    ITEM_MOD_ARCANE_DAMAGE_DONE,
+    ITEM_MOD_FIRE_DAMAGE_DONE,
+    ITEM_MOD_FROST_DAMAGE_DONE,
+    ITEM_MOD_HOLY_DAMAGE_DONE,
+    ITEM_MOD_NATURE_DAMAGE_DONE,
+    ITEM_MOD_SHADOW_DAMAGE_DONE,
+})
+
 local function parseTooltipNumber(value)
     if type(value) ~= "string" then
         return nil
@@ -254,6 +320,18 @@ local function parseTooltipNumber(value)
 
     local normalized = string.gsub(value, ",", ".")
     return tonumber(normalized)
+end
+
+local function stripTooltipStatPrefix(text)
+    if type(text) ~= "string" then
+        return nil
+    end
+
+    if ITEM_SPELL_TRIGGER_ONEQUIP and ITEM_SPELL_TRIGGER_ONEQUIP ~= "" then
+        return string.gsub(text, "^" .. escapePattern(ITEM_SPELL_TRIGGER_ONEQUIP) .. "%s*", "")
+    end
+
+    return text
 end
 
 local function isWeaponEquipLocation(equipLoc)
@@ -960,6 +1038,49 @@ function LS:GetDerivedWeaponStats(itemLink)
 
     self.weaponStatCache[itemLink] = derivedStats
     return derivedStats
+end
+
+function LS:GetTooltipFallbackStats(itemLink)
+    if not itemLink then
+        return nil
+    end
+
+    self.itemTooltipStatCache = self.itemTooltipStatCache or {}
+    local cachedStats = self.itemTooltipStatCache[itemLink]
+    if cachedStats ~= nil then
+        return cachedStats or nil
+    end
+
+    weaponStatTooltip:ClearLines()
+    weaponStatTooltip:SetHyperlink(itemLink)
+
+    local fallbackStats = {}
+
+    for lineIndex = 2, weaponStatTooltip:NumLines() do
+        local leftTextRegion = _G[weaponStatTooltip:GetName() .. "TextLeft" .. lineIndex]
+        local leftText = leftTextRegion and leftTextRegion:GetText() or nil
+        local normalizedText = stripTooltipStatPrefix(leftText)
+
+        if normalizedText and normalizedText ~= "" then
+            for _, pattern in ipairs(SPELL_POWER_TOOLTIP_PATTERNS) do
+                local valueText = string.match(normalizedText, pattern)
+                local parsedValue = valueText and parseTooltipNumber(valueText) or nil
+
+                if parsedValue and parsedValue > 0 then
+                    fallbackStats.spellPower = (fallbackStats.spellPower or 0) + parsedValue
+                    break
+                end
+            end
+        end
+    end
+
+    if not next(fallbackStats) then
+        self.itemTooltipStatCache[itemLink] = false
+        return nil
+    end
+
+    self.itemTooltipStatCache[itemLink] = fallbackStats
+    return fallbackStats
 end
 
 function LS:GetEquippedStatTotal(statKey, excludedSlots)
@@ -1892,6 +2013,16 @@ function LS:GetItemScore(itemLink, context)
     local stats = GetItemStats(itemLink)
     if not stats then
         return nil
+    end
+
+    local tooltipFallbackStats = self:GetTooltipFallbackStats(itemLink)
+    if tooltipFallbackStats then
+        for statKey, value in pairs(tooltipFallbackStats) do
+            local currentValue = self:GetStatValue(stats, statKey)
+            if value > currentValue then
+                stats[statKey] = value
+            end
+        end
     end
 
     local derivedWeaponStats = self:GetDerivedWeaponStats(itemLink)
